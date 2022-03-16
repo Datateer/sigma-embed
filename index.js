@@ -96,8 +96,6 @@ const pageTemplate = ({ embedUrl = "", controls = {} } = {}) => {
   </head>
   <body>
     <h1>Dashboard Embed Example</h1>
-    <h3>Secrets</h3>
-    <p>Set these as environment variables or paste them here</p>
     <h3>Controls</h3>
     <form>
     <input type="text" placeholder="add controls by typing control ID here" id="new-control" />

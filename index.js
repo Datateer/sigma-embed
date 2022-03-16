@@ -1,10 +1,14 @@
 const express = require("express");
-const app = express();
-const port = 3000;
 const crypto = require("crypto");
 const uuid = require("uuid");
-
+const bodyParser = require("body-parser");
 require("dotenv").config();
+
+const app = express();
+app.use(bodyParser.urlencoded({ extended: true }));
+const port = 3000;
+
+DEFAULT_CONTROLS = { organization: "10b2b63a-2217-45b5-a0fc-2050f385bf83" };
 
 const generateEmbedUrlForSigma = ({
   embedSecret,
@@ -12,6 +16,7 @@ const generateEmbedUrlForSigma = ({
   allowExport = true,
   sessionLength = 3600,
   externalUserId = "none",
+  controls = {}, // a hash map of controlId: controlValue
 }) => {
   if (!embedSecret) {
     throw new AppError("Missing embedSecret");
@@ -21,10 +26,9 @@ const generateEmbedUrlForSigma = ({
   }
   const nonce = uuid.v4();
   const timestamp = Math.floor(new Date().getTime() / 1000);
-  // `Control Id` is the Control Id from your dashboard and `controlValue` is the value you wish to pass
-  // const controlId = encodeURIComponent('Control ID')
-  // const controlValue = encodeUIRComponent('Control Value')
-  let url = `${embedPath}?:nonce=${nonce}&:allow_export=${allowExport}&:time=${timestamp}&:session_length=${sessionLength}&:external_user_id=${externalUserId}`;
+  let url = `${embedPath}?:nonce=${nonce}&:allow_export=${allowExport}&:time=${timestamp}&:session_length=${sessionLength}&:external_user_id=${externalUserId}&${joinControls(
+    controls
+  )}`;
   const signature = crypto
     .createHmac("sha256", Buffer.from(embedSecret, "utf8"))
     .update(Buffer.from(url, "utf8"))
@@ -33,52 +37,103 @@ const generateEmbedUrlForSigma = ({
   return url;
 };
 
+const joinControls = (controls = {}) => {
+  if (Object.keys(controls).length === 0) {
+    return "";
+  }
+  url_fragments = [];
+  for (const controlId in controls) {
+    if (controls.hasOwnProperty(controlId)) {
+      url_fragments.push(
+        `${encodeURIComponent(controlId)}=${encodeURIComponent(
+          controls[controlId]
+        )}`
+      );
+    }
+  }
+  return url_fragments.join("&");
+};
+
+const controlFormElement = (controlId, controlValue) => `
+  <div id="control-${controlId}">
+    <label><strong>${controlId}</strong></label><br />
+    <input type="text" name="${controlId}" id="${controlId}" value="${controlValue}" />
+    <button type="button" onClick="const elm = document.getElementById('control-${controlId}'); elm.parentNode.removeChild(elm)">Remove</button>
+  </div>
+`;
+const pageTemplate = ({ embedUrl = "", controls = {} } = {}) => {
+  const controlsFormElements = [];
+  for (const controlId in controls) {
+    controlsFormElements.push(
+      controlFormElement(controlId, controls[controlId])
+    );
+  }
+  return `<html>
+  <head>
+    <link rel="stylesheet" href="https://unpkg.com/simpledotcss/simple.min.css">
+    <style>body {grid-template-columns: 1fr min(60rem,90%) 1fr !important;}</style>
+    <script>
+      const controlFormElement = (controlId, controlValue) => \`
+        <div id="control-$\{controlId\}">
+          <label><strong>$\{controlId\}</strong></label><br />
+          <input type="text" name="$\{controlId\}" id="$\{controlId\}" value="$\{controlValue\}" />
+          <button type="button" onClick="const elm = document.getElementById('control-$\{controlId\}'); elm.parentNode.removeChild(elm)">Remove</button>
+        </div>
+      \`;
+      const addControl = controlId => {
+        const elm = document.getElementById('new-control'); 
+        const newControlElm = htmlToElem(controlFormElement(elm.value, ''));
+        document.getElementById('controls').appendChild(newControlElm);
+        elm.value = '';
+      }
+      const htmlToElem = (html) => {
+        let temp = document.createElement('template');
+        html = html.trim(); // Never return a space text node as a result
+        temp.innerHTML = html;
+        return temp.content.firstChild;
+      }
+    </script>
+  </head>
+  <body>
+    <h1>Dashboard Embed Example</h1>
+    <h3>Secrets</h3>
+    <p>Set these as environment variables or paste them here</p>
+    <h3>Controls</h3>
+    <form>
+    <input type="text" placeholder="add controls by typing control ID here" id="new-control" />
+    <button type="button" onClick="addControl()">Add control</button>
+    </form>
+    <form action="/" method="post"> 
+      <div id="controls">
+        ${controlsFormElements.join("")}
+      </div>
+      <button type="submit">Generate Embed</button>
+    </form>
+    ${embedUrl && embedSection(embedUrl)}
+  </body>
+</html>`;
+};
+const embedSection = (embedUrl) => {
+  return `<h4>Embed URL</h4>
+  <div>
+    ${embedUrl}
+  </div>
+  <h4>Embedded Dashboard</h4>
+  <iframe src="${embedUrl}" style="width: 1200px; height: 600px;" />
+  `;
+};
+
 app.get("/", (req, res) => {
+  res.send(pageTemplate({ controls: DEFAULT_CONTROLS }));
+});
+app.post("/", (req, res) => {
+  const controls = req.body;
   const embedUrl = generateEmbedUrlForSigma({
     embedSecret: process.env.DASHBOARD_EMBED_SECRET,
     embedPath: process.env.DASHBOARD_EMBED_PATH,
+    controls,
   });
-  // // :nonce - Any random string you like but cannot be repeated within the hour.
-  // let searchParams = `?:nonce=${uuid.v4()}`;
-
-  // // :allow_export - true to allow export/download on visualizations
-  // searchParams += "&:allow_export=true";
-
-  // // :session_length - The number of seconds the user should be allowed to view the embed
-  // searchParams += "&:session_length=3600";
-
-  // // :time - Current Time as UNIX Timestamp
-  // searchParams += `&:time=${Math.floor(new Date().getTime() / 1000)}`;
-
-  // // :external_user_id - a unique JSON string identifying the viewer
-  // searchParams += `&:external_user_id=${USER_ID}`;
-
-  // // `Control Id` is the Control Id from your dashboard and `controlValue` is the value you wish to pass
-  // // searchParams += `&${encodeURIComponent("Control Id")}=${encodeURIComponent(
-  // //   controlValue
-  // // )}`;
-
-  // // EMBED_PATH - Generated on your dashboard
-  // const URL_WITH_SEARCH_PARAMS =
-  //   process.env.DASHBOARD_EMBED_PATH + searchParams;
-
-  // // EMBED_SECRET - Sigma Embed Secret generated in your admin portal
-  // const SIGNATURE = crypto
-  //   .createHmac(
-  //     "sha256",
-  //     Buffer.from(process.env.DASHBOARD_EMBED_SECRET, "utf8")
-  //   )
-  //   .update(Buffer.from(URL_WITH_SEARCH_PARAMS, "utf8"))
-  //   .digest("hex");
-
-  // const embedUrl = `${URL_WITH_SEARCH_PARAMS}&:signature=${SIGNATURE}`;
-
-  // res.status(200).send(embedUrl);
-  res.send(`<html>
-    <h1>Dashboard Embed Example</h1>
-    <h3>${embedUrl}</h3>
-    <iframe src="${embedUrl}" style="width: 100%; height: 100%;" />
-  </html>`);
+  res.send(pageTemplate({ embedUrl, controls }));
 });
 
 app.listen(port, () => {

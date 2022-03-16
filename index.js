@@ -26,7 +26,7 @@ const generateEmbedUrlForSigma = ({
   }
   const nonce = uuid.v4();
   const timestamp = Math.floor(new Date().getTime() / 1000);
-  let url = `${embedPath}?:nonce=${nonce}&:allow_export=${allowExport}&:time=${timestamp}&:session_length=${sessionLength}&:external_user_id=${externalUserId}&${joinControls(
+  let url = `${embedPath}?:nonce=${nonce}&:allow_export=${allowExport}&:time=${timestamp}&:session_length=${sessionLength}&:external_user_id=${externalUserId}${joinControls(
     controls
   )}`;
   const signature = crypto
@@ -51,7 +51,7 @@ const joinControls = (controls = {}) => {
       );
     }
   }
-  return url_fragments.join("&");
+  return `&${url_fragments.join("&")}`;
 };
 
 const controlFormElement = (controlId, controlValue) => `

@@ -1,5 +1,7 @@
 # Sigma Embedding Example
 
+<img src="./demo.gif" width="800" />
+
 ## Setup
 
 1. Create a file named `.env` with the contents below and run `source .env` to activate
